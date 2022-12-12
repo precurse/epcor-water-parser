@@ -1,7 +1,9 @@
+import argparse
 import calendar
-import requests
-import logging
 import datetime
+import logging
+import requests
+import sys
 from decimal import *
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -27,8 +29,8 @@ class WaterReport():
         return (self.total_hardness - self.calcium_hardness)/4
 
 
-def download_daily_data(report, zone="ELS"):
-    url = "https://apps.epcor.ca/DailyWaterQuality/Default.aspx?zone=ELS"
+def download_daily_data(report, zone):
+    url = f"https://apps.epcor.ca/DailyWaterQuality/Default.aspx?zone={zone}"
     r = requests.get(url)
     
     if r.status_code == 200:
@@ -37,8 +39,17 @@ def download_daily_data(report, zone="ELS"):
         print(f"Unable to get Daily Water Data at {url}")
         sys.exit(1)
 
-    report.ph = Decimal(soup.find(id="phLabel7").text)
-    report.alkalinity = soup.find(id="AlkalinityLabel7").text
+    try:
+        report.ph = Decimal(soup.find(id="phLabel7").text)
+        report.alkalinity = soup.find(id="AlkalinityLabel7").text
+    except decimal.InvalidOperation:
+        # Data invalid, fallback to previous day
+        try:
+            report.ph = Decimal(soup.find(id="phLabel6").text)
+            report.alkalinity = soup.find(id="AlkalinityLabel6").text
+        except:
+            print("Error getting daily data")
+            sys.exit(1)
 
 def download_pdf(url):
   response = requests.get(url)
@@ -192,8 +203,12 @@ def get_previous_months(n):
     return f"{previous_month_name}-{previous_month_year}"
 
 def main():
+    parser = argparse.ArgumentParser(description='Calculate water stats from EPCOR water reports')
+    parser.add_argument('--zone','-z', choices=['ELS', 'Rossdale'], default='ELS')
+    args = parser.parse_args()
+
     report = WaterReport()
-    download_daily_data(report, zone="ELS")
+    download_daily_data(report, zone=args.zone)
     data = None
 
     # Try getting current month's and previous 2 months data
@@ -205,7 +220,7 @@ def main():
             pdf_lines = parse_lines_from_pdf(pdf_file)
             print(f"Using data for {mon}")
             data = parse_values(pdf_lines, report)
-        except pdfminer.pdfparser.PDFSyntaxError as e:
+        except PDFSyntaxError as e:
             # Keep trying other months data
             logging.debug(f"Failed to get data for {mon}")
             continue
