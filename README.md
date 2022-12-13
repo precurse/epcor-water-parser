@@ -28,7 +28,7 @@ sulphate: 54.5
 chloride: 4.81
 ```
 
-# Example Usage (Rossdale)
+## Example Usage (Rossdale)
 ```sh
 $ python3 epcor-water.py --zone Rossdale
 Using data for october-2022

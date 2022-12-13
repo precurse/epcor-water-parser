@@ -7,26 +7,27 @@ import sys
 from decimal import *
 from bs4 import BeautifulSoup
 from io import BytesIO
-from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
-from pdfminer.converter import TextConverter
-from pdfminer.layout import LAParams
-from pdfminer.pdfpage import PDFPage
+from pdfminer.high_level import extract_text
 from pdfminer.pdfparser import PDFSyntaxError
 
 class WaterReport():
     def __init__(self):
-        self.calcium_hardness = None
-        self.total_hardness = None
-        self.ph = None
         self.alkalinity = None
-        self.sulphate = None
+        self.calcium_hardness = None
         self.chloride = None
+        self.ph = None
+        self.sodium = None
+        self.sulphate = None
+        self.total_hardness = None
 
     def get_calcium(self):
         return self.calcium_hardness * 0.4
 
     def get_magnesium(self):
         return (self.total_hardness - self.calcium_hardness)/4
+
+    def get_bicarbonate(self):
+        return (self.alkalinity/50)*61
 
 
 def download_daily_data(report, zone):
@@ -41,12 +42,12 @@ def download_daily_data(report, zone):
 
     try:
         report.ph = Decimal(soup.find(id="phLabel7").text)
-        report.alkalinity = soup.find(id="AlkalinityLabel7").text
+        report.alkalinity = Decimal(soup.find(id="AlkalinityLabel7").text)
     except decimal.InvalidOperation:
         # Data invalid, fallback to previous day
         try:
             report.ph = Decimal(soup.find(id="phLabel6").text)
-            report.alkalinity = soup.find(id="AlkalinityLabel6").text
+            report.alkalinity = Decimal(soup.find(id="AlkalinityLabel6").text)
         except:
             print("Error getting daily data")
             sys.exit(1)
@@ -56,19 +57,8 @@ def download_pdf(url):
   return BytesIO(response.content)
 
 def parse_pdf(pdf_file):
-  rsrcmgr = PDFResourceManager()
-  retstr = BytesIO()
-  laparams = LAParams()
-  device = TextConverter(rsrcmgr, retstr, laparams=laparams)
-  interpreter = PDFPageInterpreter(rsrcmgr, device)
-
-  for page in PDFPage.get_pages(pdf_file, pagenos=set(), maxpages=0, caching=True, check_extractable=True):
-      interpreter.process_page(page)
-
-  text = retstr.getvalue()
-  retstr.close()
-  device.close()
-  return text.decode("utf-8")
+  text = extract_text(pdf_file)
+  return text
 
 def parse_lines_from_pdf(pdf_file):
   # parse the PDF and get all the text
@@ -80,7 +70,7 @@ def parse_lines_from_pdf(pdf_file):
   # return PDF lines
   return lines
 
-def parse_values(pdf_lines, report):
+def parse_values(pdf_lines, report, print_report=False):
     headers = []
     units = []
     monthly_count = []
@@ -154,6 +144,7 @@ def parse_values(pdf_lines, report):
         if monthly_count_done and not monthly_average_start:
             monthly_average_start = True
 
+        # Subtract 2 from headers list since they include Bacteriological data which messes with things
         if header_done and len(monthly_average) == len(headers)-2:
             monthly_average_done = True
 
@@ -166,11 +157,9 @@ def parse_values(pdf_lines, report):
         if ytd_median_start and not ytd_median_done:
             ytd_median.append(line)
 
-    # TODO: Add flag to dump all data
-    # print data
-    # print(f"{len(headers)} vs {len(monthly_average)}")
-    # for i in range(len(headers)-2):
-    #     print("{}{}{}".format(headers[i].ljust(30), units[i].ljust(12), monthly_average[i].rjust(10) ))
+    if print_report:
+        for i in range(len(headers)-2):
+            print("{}{}{}".format(headers[i].ljust(30), units[i].ljust(12), monthly_average[i].rjust(10) ))
 
     data = {'headers': headers,
             'units': units,
@@ -193,6 +182,9 @@ def update_report_from_pdf(data, report):
         if v.lower() == 'chloride dissolved':
             report.chloride = Decimal(data['monthly_average'][idx])
 
+        if v.lower() == 'sodium':
+            report.sodium = Decimal(data['monthly_average'][idx])
+
 def get_previous_months(n):
     today = datetime.date.today()
 
@@ -205,6 +197,7 @@ def get_previous_months(n):
 def main():
     parser = argparse.ArgumentParser(description='Calculate water stats from EPCOR water reports')
     parser.add_argument('--zone','-z', choices=['ELS', 'Rossdale'], default='ELS')
+    parser.add_argument('--full', action="store_true", default=False)
     args = parser.parse_args()
 
     report = WaterReport()
@@ -219,7 +212,7 @@ def main():
             pdf_file = download_pdf(url)
             pdf_lines = parse_lines_from_pdf(pdf_file)
             print(f"Using data for {mon}")
-            data = parse_values(pdf_lines, report)
+            data = parse_values(pdf_lines, report, print_report=args.full)
         except PDFSyntaxError as e:
             # Keep trying other months data
             logging.debug(f"Failed to get data for {mon}")
@@ -229,11 +222,14 @@ def main():
 
     update_report_from_pdf(data, report)
 
-    print(f"ph: {report.ph}")
-    print(f"calcium: {report.get_calcium()}")
-    print(f"magnesium: {report.get_magnesium()}")
-    print(f"sulphate: {report.sulphate}")
-    print(f"chloride: {report.chloride}")
+    print(f"pH: {report.ph}")
+    print(f"Calcium (Ca): {report.get_calcium()}")
+    print(f"Magnesium (Mg): {report.get_magnesium()}")
+    print(f"Sulphate (SO4): {report.sulphate}")
+    print(f"Chloride (Cl): {report.chloride}")
+    print(f"Sodium (Na): {report.sodium}")
+    print(f"Bicarbonate (HCO3): {report.get_bicarbonate()}")
+    print(f"Alkalinity (CaCO3): {report.alkalinity}")
 
 if __name__ == "__main__":
     main()
