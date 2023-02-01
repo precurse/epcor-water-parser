@@ -170,7 +170,7 @@ def parse_values(pdf_lines, report, print_report=False):
 
 def update_report_from_pdf(data, report):
     for idx, v in enumerate(data['headers']):
-        if v.lower() == 'hardness, total':
+        if 'hardness' in v.lower() and 'total' in v.lower():
             report.total_hardness = int(data['monthly_average'][idx])
 
         if v.lower() == 'calcium hardness':
