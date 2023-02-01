@@ -43,14 +43,19 @@ def download_daily_data(report, zone):
     try:
         report.ph = Decimal(soup.find(id="phLabel7").text)
         report.alkalinity = Decimal(soup.find(id="AlkalinityLabel7").text)
+        date = soup.find(id="DateLabel7").text
+        print(f"Daily data date: {date}")
     except decimal.InvalidOperation:
         # Data invalid, fallback to previous day
         try:
             report.ph = Decimal(soup.find(id="phLabel6").text)
             report.alkalinity = Decimal(soup.find(id="AlkalinityLabel6").text)
+            date = soup.find(id="DateLabel6").text
+            print(f"Daily data date: {date}")
         except:
             print("Error getting daily data")
             sys.exit(1)
+
 
 def download_pdf(url):
   response = requests.get(url)
@@ -211,7 +216,7 @@ def main():
         try:
             pdf_file = download_pdf(url)
             pdf_lines = parse_lines_from_pdf(pdf_file)
-            print(f"Using data for {mon}")
+            print(f"Monthly data date: {mon}")
             data = parse_values(pdf_lines, report, print_report=args.full)
         except PDFSyntaxError as e:
             # Keep trying other months data
