@@ -20,13 +20,18 @@ class WaterReport():
         self.sulphate = None
         self.total_hardness = None
 
-    def get_calcium(self):
-        return self.calcium_hardness * 0.4
+    @property
+    def calcium(self):
+        calcium = self.calcium_hardness * 0.4
+        calcium = Decimal(calcium).quantize(Decimal("0.1"), rounding=ROUND_UP)
+        return calcium
 
-    def get_magnesium(self):
+    @property
+    def magnesium(self):
         return (self.total_hardness - self.calcium_hardness)/4
 
-    def get_bicarbonate(self):
+    @property
+    def bicarbonate(self):
         return (self.alkalinity/50)*61
 
 
@@ -44,14 +49,14 @@ def download_daily_data(report, zone):
         report.ph = Decimal(soup.find(id="phLabel7").text)
         report.alkalinity = Decimal(soup.find(id="AlkalinityLabel7").text)
         date = soup.find(id="DateLabel7").text
-        print(f"Daily data date: {date}")
+        print(f"Daily data from: {date}")
     except decimal.InvalidOperation:
         # Data invalid, fallback to previous day
         try:
             report.ph = Decimal(soup.find(id="phLabel6").text)
             report.alkalinity = Decimal(soup.find(id="AlkalinityLabel6").text)
             date = soup.find(id="DateLabel6").text
-            print(f"Daily data date: {date}")
+            print(f"Daily data from: {date}")
         except:
             print("Error getting daily data")
             sys.exit(1)
@@ -174,6 +179,15 @@ def parse_values(pdf_lines, report, print_report=False):
     return data
 
 def update_report_from_pdf(data, report):
+    if data is None:
+        print("Data is empty")
+        sys.exit(1)
+
+    try:
+        data['headers']
+    except KeyError:
+        print("Invalid data passed: {}".format(data))
+
     for idx, v in enumerate(data['headers']):
         if 'hardness' in v.lower() and 'total' in v.lower():
             report.total_hardness = int(data['monthly_average'][idx])
@@ -210,13 +224,14 @@ def main():
     data = None
 
     # Try getting current month's and previous 2 months data
-    for i in range(0,3):
+    for i in range(1,4):
         mon = get_previous_months(i)
         url = f"https://www.epcor.com/products-services/water/water-quality/wqreportsedmonton/wwq-edmonton-{mon}.pdf"
+        logging.debug(f"Trying url {url}")
         try:
             pdf_file = download_pdf(url)
             pdf_lines = parse_lines_from_pdf(pdf_file)
-            print(f"Monthly data date: {mon}")
+            print(f"Monthly data from: {mon}")
             data = parse_values(pdf_lines, report, print_report=args.full)
         except PDFSyntaxError as e:
             # Keep trying other months data
@@ -228,12 +243,12 @@ def main():
     update_report_from_pdf(data, report)
 
     print(f"pH: {report.ph}")
-    print(f"Calcium (Ca): {report.get_calcium()}")
-    print(f"Magnesium (Mg): {report.get_magnesium()}")
+    print(f"Calcium (Ca): {report.calcium}")
+    print(f"Magnesium (Mg): {report.magnesium}")
     print(f"Sulphate (SO4): {report.sulphate}")
     print(f"Chloride (Cl): {report.chloride}")
     print(f"Sodium (Na): {report.sodium}")
-    print(f"Bicarbonate (HCO3): {report.get_bicarbonate()}")
+    print(f"Bicarbonate (HCO3): {report.bicarbonate}")
     print(f"Alkalinity (CaCO3): {report.alkalinity}")
 
 if __name__ == "__main__":
