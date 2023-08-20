@@ -1,0 +1,31 @@
+---
+name: CI
+'on':
+  pull_request:
+  push:
+    branches:
+      - master
+  schedule:
+    - cron: "0 16 * * *"
+
+jobs:
+  Update-Water-Data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+        with:
+          repository: precurse/epcor-water-results
+          path: results
+          ssh-key:  ${{ secrets.ACTIONS_GITHUB_TOKEN }}
+      - run: sudo apt update && sudo apt install -y python3-pip && pip3 install -r requirements.txt
+      - run: bash run.sh > results/README.md
+      - run: cd results
+      - name: setup git config
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "<github-actions@github.com>"
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+      - run: cd results && git add README.md && git commit -m "Updates for ${{ steps.date.outputs.date }}" && git push origin master

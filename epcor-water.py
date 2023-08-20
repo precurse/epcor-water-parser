@@ -290,10 +290,10 @@ def main():
     print(f"pH: {report.ph}")
     print(f"Calcium (Ca): {report.calcium}")
     print(f"Magnesium (Mg): {report.magnesium}")
-    print(f"Sulphate (SO4): {report.sulphate}")
-    print(f"Chloride (Cl): {report.chloride}")
     print(f"Sodium (Na): {report.sodium}")
     print(f"Bicarbonate (HCO3): {report.bicarbonate}")
+    print(f"Sulphate (SO4): {report.sulphate}")
+    print(f"Chloride (Cl): {report.chloride}")
     print(f"Alkalinity (CaCO3): {report.alkalinity}")
 
 if __name__ == "__main__":
