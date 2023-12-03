@@ -1,5 +1,5 @@
 # Epcor Water 
-
+The daily output can be found at [https://github.com/precurse/epcor-water-results](https://github.com/precurse/epcor-water-results)
 
 ## Installation
 ```sh
