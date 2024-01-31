@@ -1,6 +1,8 @@
 # Epcor Water 
 The daily output can be found at [https://github.com/precurse/epcor-water-results](https://github.com/precurse/epcor-water-results)
 
+Some water data is only available in the [monthly reports](https://www.epcor.com/products-services/water/water-quality/Pages/water-quality-reports-edmonton.aspx#/waterworks_), which usually lag behind by a month or two. The [daily water report data](https://www.epcor.com/products-services/water/water-quality/Pages/daily-water-quality.aspx) is used as much as possible otherwise. This is the best we have (for now).
+
 ## Installation
 ```sh
 pip3 install -r requirements.txt
