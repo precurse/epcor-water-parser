@@ -233,16 +233,17 @@ def update_report_from_pdf(data, report):
         if 'hardness' in v.lower() and 'total' in v.lower():
             report.total_hardness = int(data['monthly_average'][idx])
 
-        if v.lower() == 'calcium hardness':
+        if v.strip().lower() == 'calcium hardness':
+            logging.debug("Found calcium hardness: {}".format(data['monthly_average'][idx]))
             report.calcium_hardness = int(data['monthly_average'][idx])
 
-        if v.lower() == 'sulphate dissolved':
+        if v.strip().lower() == 'sulphate dissolved':
             report.sulphate = Decimal(data['monthly_average'][idx])
 
-        if v.lower() == 'chloride dissolved':
+        if v.strip().lower() == 'chloride dissolved':
             report.chloride = Decimal(data['monthly_average'][idx])
 
-        if v.lower() == 'sodium':
+        if v.strip().lower() == 'sodium':
             report.sodium = Decimal(data['monthly_average'][idx])
 
 def get_previous_months(n):
