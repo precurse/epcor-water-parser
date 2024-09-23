@@ -250,10 +250,10 @@ def get_previous_months(n):
     today = datetime.date.today()
 
     previous_month = today - datetime.timedelta(weeks=4*n)
-    previous_month_name = previous_month.strftime("%B").lower()
+    previous_month_num = previous_month.strftime("%m")
     previous_month_year = previous_month.strftime("%Y")
 
-    return f"{previous_month_name}-{previous_month_year}"
+    return f"{previous_month_year}-{previous_month_num}"
 
 def main():
     parser = argparse.ArgumentParser(description='Calculate water stats from EPCOR water reports')
@@ -272,7 +272,8 @@ def main():
     # Try getting current month's and previous 2 months data
     for i in range(1,4):
         mon = get_previous_months(i)
-        url = f"https://www.epcor.com/products-services/water/water-quality/wqreportsedmonton/wwq-edmonton-{mon}.pdf"
+        url = f"https://www.epcor.com/content/dam/epcor/documents/water-quality-reports/{mon}_edmonton_water-quality_monthly-summary.pdf"
+        #url = f"https://www.epcor.com/products-services/water/water-quality/wqreportsedmonton/wwq-edmonton-{mon}.pdf"
         logging.debug(f"Trying url {url}")
         try:
             pdf_file = download_pdf(url)
