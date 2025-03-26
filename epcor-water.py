@@ -270,7 +270,7 @@ def main():
     data = None
 
     # Try getting current month's and previous 2 months data
-    for i in range(1,4):
+    for i in range(1,5):
         mon = get_previous_months(i)
         url = f"https://www.epcor.com/content/dam/epcor/documents/water-quality-reports/{mon}_edmonton_water-quality_monthly-summary.pdf"
         #url = f"https://www.epcor.com/products-services/water/water-quality/wqreportsedmonton/wwq-edmonton-{mon}.pdf"
