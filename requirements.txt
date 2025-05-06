@@ -2,3 +2,4 @@ bs4
 requests
 pdfminer.six==20231228
 lxml
+pyyaml

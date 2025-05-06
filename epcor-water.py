@@ -219,6 +219,31 @@ def parse_values(pdf_lines, report, print_report=False):
 
     return data
 
+def update_report_from_yaml(report):
+    import yaml
+    """
+    Reads a YAML file containing water data and returns it as a dictionary.
+
+    :param file_path: Path to the YAML file.
+    :return: Dictionary with water data.
+    """
+    try:
+        with open("water_data.yml", 'r') as file:
+            data = yaml.safe_load(file)
+    except FileNotFoundError:
+        print(f"Error: File '{file_path}' not found.")
+        return None
+    except yaml.YAMLError as e:
+        print(f"Error parsing YAML file: {e}")
+        return None
+
+    report.total_hardness = int(data['total_hardness'])
+    report.calcium_hardness = int(data['calcium_hardness'])
+    report.sulphate = int(data['sulphate'])
+    report.chloride = data['chloride']
+    report.sodium = data['sodium']
+    
+
 def update_report_from_pdf(data, report):
     if data is None:
         print("Data is empty")
@@ -267,8 +292,21 @@ def main():
 
     report = WaterReport()
     download_daily_data(report, zone=args.zone)
-    data = None
+    #data = get_pdf_data()
 
+    #update_report_from_pdf(data, report)
+    update_report_from_yaml(report)
+
+    print(f"pH: {report.ph}")
+    print(f"Calcium (Ca): {report.calcium}")
+    print(f"Magnesium (Mg): {report.magnesium}")
+    print(f"Sodium (Na): {report.sodium}")
+    print(f"Bicarbonate (HCO3): {report.bicarbonate}")
+    print(f"Sulphate (SO4): {report.sulphate}")
+    print(f"Chloride (Cl): {report.chloride}")
+    print(f"Alkalinity (CaCO3): {report.alkalinity}")
+
+def get_pdf_data():
     # Try getting current month's and previous 2 months data
     for i in range(1,5):
         mon = get_previous_months(i)
@@ -286,17 +324,7 @@ def main():
             continue
         else:
             break
-
-    update_report_from_pdf(data, report)
-
-    print(f"pH: {report.ph}")
-    print(f"Calcium (Ca): {report.calcium}")
-    print(f"Magnesium (Mg): {report.magnesium}")
-    print(f"Sodium (Na): {report.sodium}")
-    print(f"Bicarbonate (HCO3): {report.bicarbonate}")
-    print(f"Sulphate (SO4): {report.sulphate}")
-    print(f"Chloride (Cl): {report.chloride}")
-    print(f"Alkalinity (CaCO3): {report.alkalinity}")
+    return data
 
 if __name__ == "__main__":
     main()
