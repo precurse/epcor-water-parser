@@ -1,5 +1,5 @@
 bs4
 requests
-pdfminer.six==20231228
+pdfplumber
 lxml
 pyyaml

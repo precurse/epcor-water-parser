@@ -3,11 +3,10 @@ import datetime
 import logging
 import requests
 import sys
+import pdfplumber
 from decimal import Decimal, ROUND_UP, InvalidOperation
 from bs4 import BeautifulSoup
 from io import BytesIO
-from pdfminer.high_level import extract_text
-from pdfminer.pdfparser import PDFSyntaxError
 
 class WaterReport():
     def __init__(self):
@@ -21,13 +20,13 @@ class WaterReport():
 
     @property
     def calcium(self):
-        calcium = self.calcium_hardness * 0.4
+        calcium = self.calcium_hardness * Decimal(0.4)
         calcium = Decimal(calcium).quantize(Decimal("0.1"), rounding=ROUND_UP)
         return calcium
 
     @property
     def magnesium(self):
-        return (self.total_hardness - self.calcium_hardness)/4
+        return (self.total_hardness - self.calcium_hardness)/Decimal(4.0)
 
     @property
     def bicarbonate(self):
@@ -67,15 +66,15 @@ def download_daily_data(report, zone):
 
 def download_pdf(url):
   response = requests.get(url)
+  if response.status_code != 200:
+      logging.debug(f"Epcor returned {response}")
+      return None
   return BytesIO(response.content)
 
-def parse_pdf(pdf_file):
-  text = extract_text(pdf_file)
-  return text
-
-def parse_lines_from_pdf(pdf_file):
+def parse_lines_from_pdf(pdf_filename):
   # parse the PDF and get all the text
-  pdf_text = parse_pdf(pdf_file)
+  with pdfplumber.open(pdf_filename) as pdf:
+    pdf_text = pdf.pages[0].extract_text()
 
   # split the text by newline to get all the lines
   lines = pdf_text.split("\n")
@@ -85,25 +84,9 @@ def parse_lines_from_pdf(pdf_file):
 
 def parse_parameter_names(pdf_lines):
     parameters = []
-    parameter_name_start = False
 
     for line in pdf_lines:
         logging.debug(f"Parsing line {line} for parameter name")
-
-        if line.startswith('Alkalinity'):
-            logging.debug("Found Alkalinity. Starting parameter name parsing")
-            parameter_name_start = True
-
-        # Bacteriological Data is a heading, and not a parameter
-        if parameter_name_start and line.startswith('Bacteriological Data'):
-            logging.debug("Ignoring Bacteriological Data parameter")
-            continue
-
-        # e. coli is the last parameter name
-        if line.lower().startswith('e. coli'):
-            logging.debug("Found e.coli. Done with Parameter name parsing")
-            parameters.append(line)
-            return parameters
 
         if parameter_name_start and line.strip() != "":
             parameters.append(line)
@@ -167,7 +150,7 @@ def parse_monthly_averages(pdf_lines, max_counts):
         if len(averages) == max_counts-2:
             return averages
 
-def parse_values(pdf_lines, report, print_report=False):
+def parse_values_from_pdf_lines(pdf_lines, report, print_report=False):
     headers = []
     units = []
     monthly_count = []
@@ -191,33 +174,44 @@ def parse_values(pdf_lines, report, print_report=False):
 
     data = {}
 
-    p = parse_parameter_names(pdf_lines)
-    data['parameters'] = p
-    # TODO: Fix. Remove "headers" name, since this is not an accurate name
-    data['headers'] = p
+    # We only need to check for the following in the PDF:
+    # Total Hardness
+    # Calcium Hardness
+    # Sulphate Dissolved
+    # Chloride Dissolved
+    # Sodium
+    for line in pdf_lines:
+        logging.debug(f"parse_values checking line: {line}")
+        line_check = line.lower()
 
-
-    logging.debug(f"Got parameter names: {p}")
-
-    u = parse_units(pdf_lines, len(p))
-    data['units'] = u
-    logging.debug(f"Got unit types: {u}")
-
-    # Use unit_count length next, since it's more accurate
-    mc = parse_monthly_counts(pdf_lines, len(u))
-    logging.debug(f"Got monthly counts: {mc}")
-
-    ma = parse_monthly_averages(pdf_lines, len(u))
-    data['monthly_average'] = ma
-    logging.debug(f"Got monthly averages: {ma}")
-
-    if print_report:
-        for i in range(len(p)-2):
-            print("{}{}{}".format(p[i].ljust(30), u[i].ljust(12), ma[i].rjust(10) ))
-
-    logging.debug(f"Parsed data: {data}")
-
-    return data
+        # Get an array of integers to easily parse
+        int_array = []
+        for i in line_check.split():
+            try:
+                Decimal(i)
+                int_array.append(i)
+            except InvalidOperation:
+                continue
+        logging.debug(f"Metric values: {int_array}")
+        if line_check.startswith('total hardness'):
+            report.total_hardness = Decimal(int_array[1])
+            logging.debug(f"Found total hardness of {val}")
+        elif line_check.startswith('calcium hardness'):
+            val = line_check.split()[3]
+            report.calcium_hardness = Decimal(int_array[1])
+            logging.debug(f"Found calcium hardness of {val}")
+        elif line_check.startswith('sulphate dissolved'):
+            val = line_check.split()[3]
+            report.sulphate = Decimal(int_array[1])
+            logging.debug(f"Found sulphate dissolved of {val}")
+        elif line_check.startswith('chloride dissolved'):
+            val = line_check.split()[3]
+            report.chloride = Decimal(int_array[1])
+            logging.debug(f"Found chloride dissolved of {val}")
+        elif line_check.startswith('sodium'):
+            val = line_check.split()[3]
+            report.sodium = Decimal(int_array[1])
+            logging.debug(f"Found sodium of {val}")
 
 def update_report_from_yaml(report):
     import yaml
@@ -292,10 +286,10 @@ def main():
 
     report = WaterReport()
     download_daily_data(report, zone=args.zone)
-    #data = get_pdf_data()
+    get_pdf_data(report, args)
 
     #update_report_from_pdf(data, report)
-    update_report_from_yaml(report)
+    #update_report_from_yaml(report)
 
     print(f"pH: {report.ph}")
     print(f"Calcium (Ca): {report.calcium}")
@@ -306,25 +300,20 @@ def main():
     print(f"Chloride (Cl): {report.chloride}")
     print(f"Alkalinity (CaCO3): {report.alkalinity}")
 
-def get_pdf_data():
+def get_pdf_data(report, args):
     # Try getting current month's and previous 2 months data
     for i in range(1,5):
-        mon = get_previous_months(i)
-        url = f"https://www.epcor.com/content/dam/epcor/documents/water-quality-reports/{mon}_edmonton_water-quality_monthly-summary.pdf"
-        #url = f"https://www.epcor.com/products-services/water/water-quality/wqreportsedmonton/wwq-edmonton-{mon}.pdf"
+        year_mon = get_previous_months(i)
+        url = f"https://www.epcor.com/content/dam/epcor/documents/water-quality-reports/{year_mon}_edmonton_water-quality_monthly-summary.pdf"
         logging.debug(f"Trying url {url}")
-        try:
-            pdf_file = download_pdf(url)
-            pdf_lines = parse_lines_from_pdf(pdf_file)
-            print(f"Monthly data from: {mon}")
-            data = parse_values(pdf_lines, report, print_report=args.full)
-        except PDFSyntaxError as e:
-            # Keep trying other months data
-            logging.debug(f"Failed to get data for {mon}")
+        pdf_file = download_pdf(url)
+        if pdf_file is None:
             continue
-        else:
-            break
-    return data
+        pdf_lines = parse_lines_from_pdf(pdf_file)
+        print(f"Monthly data from: {year_mon}")
+        parse_values_from_pdf_lines(pdf_lines, report, print_report=args.full)
+        # We got a report, so break
+        break
 
 if __name__ == "__main__":
     main()
