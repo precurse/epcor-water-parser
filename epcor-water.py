@@ -151,29 +151,6 @@ def parse_monthly_averages(pdf_lines, max_counts):
             return averages
 
 def parse_values_from_pdf_lines(pdf_lines, report, print_report=False):
-    headers = []
-    units = []
-    monthly_count = []
-    monthly_average = []
-    ytd_median = []
-
-    header_start = False
-    header_done = False
-
-    units_start = False
-    units_done = False
-
-    monthly_count_start = False
-    monthly_count_done = False
-
-    monthly_average_start = False
-    monthly_average_done = False
-
-    ytd_median_start = False
-    ytd_median_done = False
-
-    data = {}
-
     # We only need to check for the following in the PDF:
     # Total Hardness
     # Calcium Hardness
@@ -304,7 +281,7 @@ def get_pdf_data(report, args):
     # Try getting current month's and previous 2 months data
     for i in range(1,5):
         year_mon = get_previous_months(i)
-        url = f"https://www.epcor.com/content/dam/epcor/documents/water-quality-reports/{year_mon}_edmonton_water-quality_monthly-summary.pdf"
+        url = f"https://www.epcor.com/content/dam/epcor/documents/water-quality-reports/{year_mon}-edmonton-water-quality-monthly-summary.pdf"
         logging.debug(f"Trying url {url}")
         pdf_file = download_pdf(url)
         if pdf_file is None:
