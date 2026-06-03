@@ -73,8 +73,23 @@ def download_pdf(url):
 
 def parse_lines_from_pdf(pdf_filename):
   # parse the PDF and get all the text
+  search_text = "2.1.1 SUMMARY OF PARAMETERS"
+  pdf_text = ""
+  found_once = False
+
   with pdfplumber.open(pdf_filename) as pdf:
-    pdf_text = pdf.pages[0].extract_text()
+      # loop until we find "SUMMARY OF PARAMETERS FOR EDMONTON DRINKING WATER"
+      for page in pdf.pages:
+          text = page.extract_text()
+          #print(f"Searching text {text}")
+          if text and search_text.lower() in text.lower():
+              logging.debug(f"SEARCH FOUND {search_text}")
+              pdf_text = text
+              # Index contains search_text, so ignore it
+              if found_once:
+                  break
+              else:
+                  found_once = True
 
   # split the text by newline to get all the lines
   lines = pdf_text.split("\n")
