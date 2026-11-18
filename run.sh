@@ -1,19 +1,17 @@
-#!/bin/sh
-set -ex
-SCRIPT_RELATIVE_DIR=$(dirname "${BASH_SOURCE[0]}")
-cd $SCRIPT_RELATIVE_DIR
+#!/bin/bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
-OUTPUT=`python3 epcor-water.py --zone ELS`
-DATE=`date`
-echo "# Results for $DATE"
+status=0
+echo "# Results for $(date)"
 
-echo "# ELS"
-echo '''```'''
-echo "$OUTPUT"
-echo '''```'''
+for zone in ELS Rossdale; do
+    echo "# $zone"
+    echo '```'
+    # stdout = results only; logs/annotations go to stderr (the Actions log)
+    python3 epcor-water.py --zone "$zone" || status=$?
+    echo '```'
+done
 
-OUTPUT=`python3 epcor-water.py --zone Rossdale`
-echo "# Rossdale"
-echo '''```'''
-echo "$OUTPUT"
-echo '''```'''
+# Run both zones even if one fails, but still fail the job
+exit "$status"

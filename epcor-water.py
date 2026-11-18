@@ -7,6 +7,7 @@ Designed to be debuggable from a CI log:
     --debug-dir so they can be uploaded with actions/upload-artifact.
   * Failures raise typed errors with distinct exit codes and emit GitHub
     ``::error::`` annotations and a Markdown job summary.
+  * Logs and workflow commands go to stderr; only the results go to stdout.
   * DEBUG output is turned on automatically when the run is re-run with
     "Enable debug logging" (RUNNER_DEBUG=1) or with --debug.
 """
@@ -102,23 +103,23 @@ def _gha_escape(value: str, prop: bool = False) -> str:
 def gha_error(message: str, title: Optional[str] = None) -> None:
     if IN_ACTIONS:
         t = f",title={_gha_escape(title, prop=True)}" if title else ""
-        print(f"::error{t}::{_gha_escape(message)}", flush=True)
+        print(f"::error{t}::{_gha_escape(message)}", file=sys.stderr, flush=True)
 
 
 def gha_warning(message: str) -> None:
     if IN_ACTIONS:
-        print(f"::warning::{_gha_escape(message)}", flush=True)
+        print(f"::warning::{_gha_escape(message)}", file=sys.stderr, flush=True)
 
 
 @contextlib.contextmanager
 def gha_group(name: str):
     if IN_ACTIONS:
-        print(f"::group::{name}", flush=True)
+        print(f"::group::{name}", file=sys.stderr, flush=True)
     try:
         yield
     finally:
         if IN_ACTIONS:
-            print("::endgroup::", flush=True)
+            print("::endgroup::", file=sys.stderr, flush=True)
 
 
 def write_step_summary(markdown: str) -> None:
@@ -162,8 +163,8 @@ def setup_logging(debug_dir: DebugDir, verbose: bool) -> Path:
     root.setLevel(logging.DEBUG)
     root.handlers.clear()
 
-    # stdout (not stderr) so ordering with ::group:: lines stays correct.
-    console = logging.StreamHandler(sys.stdout)
+    # stderr, so stdout carries only the results and can be captured by a wrapper script.
+    console = logging.StreamHandler(sys.stderr)
     console.setLevel(logging.DEBUG if verbose else logging.INFO)
     console.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s %(message)s", "%H:%M:%S"))
     root.addHandler(console)
@@ -371,7 +372,7 @@ def download_daily_data(session, report: WaterReport, zone: str, debug: DebugDir
         gha_warning(msg)
     else:
         report.alkalinity = alk[0]
-        report.alkalinity_source = f"daily data {alk[1]}"
+        report.alkalinity_source = alk[1]
         log.info("alkalinity=%s from %s (column %d)", alk[0], alk[1], alk[2])
 
 
@@ -415,7 +416,8 @@ def parse_lines_from_pdf(pdf_file: BytesIO, debug: DebugDir, label: str) -> list
         page_no, text = matches[1]
     else:
         page_no, text = matches[0]
-        log.warning("Marker found on only one page (%d); it may be the table of contents.", page_no)
+        if len(page_texts) > 1:
+            log.warning("Marker found on only one page (%d); it may be the table of contents.", page_no)
 
     debug.save(f"pdf_section_{label}.txt", text)
     log.info("Using page %d (%d lines)", page_no, text.count("\n") + 1)
@@ -543,13 +545,15 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--zone", "-z", choices=["ELS", "Rossdale"], default="ELS")
     parser.add_argument("--months-back", type=int, default=4, help="how many previous months of PDFs to try")
     parser.add_argument("--debug", action="store_true", help="verbose console logging")
-    parser.add_argument("--debug-dir", default="debug_artifacts", help="where logs/raw responses are written")
+    parser.add_argument("--debug-dir", default=None, help="where logs/raw responses are written (default: debug_artifacts/<zone>)")
     parser.add_argument("--full", action="store_true", help="(deprecated, ignored)")
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    if args.debug_dir is None:
+        args.debug_dir = f"debug_artifacts/{args.zone}"
     debug = DebugDir(args.debug_dir)
     verbose = args.debug or os.environ.get("RUNNER_DEBUG") == "1"
     log_path = setup_logging(debug, verbose)
@@ -577,6 +581,8 @@ def main(argv=None) -> int:
         )
         return 1
 
+    print(f"Daily data from: {report.daily_date}")
+    print(f"Monthly data from: {report.pdf_month}")
     for name, value in report_lines(report):
         print(f"{name}: {value}")
     write_step_summary(success_summary(report))
